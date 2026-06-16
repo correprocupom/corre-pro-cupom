@@ -12,8 +12,9 @@ logger = logging.getLogger(__name__)
 
 scheduler = BlockingScheduler(timezone="America/Sao_Paulo")
 
-# Fila de ofertas carregadas
 _offer_queue: list[dict] = []
+_posts_since_reload = 0
+RELOAD_EVERY_N_POSTS = 2  # busca novos produtos a cada 2 postagens
 
 
 def is_within_posting_hours() -> bool:
@@ -22,7 +23,7 @@ def is_within_posting_hours() -> bool:
 
 
 def reload_offers() -> None:
-    """Recarrega a fila de ofertas do Mercado Livre."""
+    """Recarrega a fila de ofertas."""
     global _offer_queue
     logger.info("Buscando novas ofertas no Mercado Livre...")
     _offer_queue = get_best_offers()
@@ -30,30 +31,33 @@ def reload_offers() -> None:
 
 
 def post_next_offer() -> None:
-    """Posta a próxima oferta da fila."""
+    global _offer_queue, _posts_since_reload
+
     if not is_within_posting_hours():
         logger.info("Fora do horário de postagem, pulando...")
         return
 
-    global _offer_queue
-    if not _offer_queue:
+    # Recarrega a cada N postagens
+    if _posts_since_reload >= RELOAD_EVERY_N_POSTS or not _offer_queue:
         reload_offers()
+        _posts_since_reload = 0
 
     if not _offer_queue:
-        logger.warning("Nenhuma oferta disponível no momento")
+        logger.warning("Nenhuma oferta disponível")
         return
 
     product = _offer_queue.pop(0)
     success = send_offer(product)
 
     if success:
-        # Pequeno delay aleatório para parecer mais natural
-        jitter = random.randint(0, 60)
-        time.sleep(jitter)
+        _posts_since_reload += 1
+        logger.info(f"Postagem {_posts_since_reload}/{RELOAD_EVERY_N_POSTS} antes do próximo reload")
+        time.sleep(random.randint(5, 30))
 
 
 def morning_routine() -> None:
-    """Rotina matinal: mensagem de boas-vindas + carrega ofertas do dia."""
+    global _posts_since_reload
+    _posts_since_reload = 0
     send_daily_intro()
     reload_offers()
 
@@ -61,10 +65,8 @@ def morning_routine() -> None:
 def start():
     logger.info("Iniciando agendador de ofertas...")
 
-    # Carrega ofertas na inicialização
     reload_offers()
 
-    # Posta a cada X minutos
     scheduler.add_job(
         post_next_offer,
         IntervalTrigger(minutes=POSTING_INTERVAL_MINUTES),
@@ -72,7 +74,6 @@ def start():
         name="Postar oferta",
     )
 
-    # Mensagem de bom dia + reload de ofertas todo dia às 8h
     scheduler.add_job(
         morning_routine,
         "cron",
@@ -82,7 +83,6 @@ def start():
         name="Rotina matinal",
     )
 
-    # Recarrega ofertas ao meio-dia também
     scheduler.add_job(
         reload_offers,
         "cron",
@@ -93,4 +93,5 @@ def start():
     )
 
     logger.info(f"Postando a cada {POSTING_INTERVAL_MINUTES} min entre {START_HOUR}h e {END_HOUR}h")
+    logger.info(f"Buscando novos produtos a cada {RELOAD_EVERY_N_POSTS} postagens")
     scheduler.start()

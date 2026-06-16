@@ -18,6 +18,12 @@ HEADERS = {
 OFFER_URLS = [
     "https://www.mercadolivre.com.br/ofertas#nav-header",
     "https://www.mercadolivre.com.br/ofertas?page=2",
+    "https://lista.mercadolivre.com.br/suplemento-esportivo_OrderId_PRICE*DESC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/whey-protein_OrderId_PRICE*DESC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/tenis-corrida_OrderId_PRICE*DESC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/creatina_OrderId_PRICE*DESC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/halteres-musculacao_OrderId_PRICE*DESC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/roupa-academia_OrderId_PRICE*DESC_NoIndex_True",
 ]
 
 
@@ -42,19 +48,53 @@ def _extract_items_from_page(url: str) -> list[dict]:
             logger.warning("ML retornou página de CAPTCHA — IP bloqueado")
             return []
 
+        # Tenta estrutura da página de ofertas (/_n.ctx.r)
         match = re.search(r'_n\.ctx\.r\s*=\s*(\{.+)', resp.text)
-        if not match:
-            logger.warning("JSON de produtos não encontrado no HTML")
-            return []
+        if match:
+            data, _ = json.JSONDecoder().raw_decode(match.group(1))
+            items = data.get("appProps", {}).get("pageProps", {}).get("data", {}).get("items", [])
+        else:
+            # Tenta estrutura da página de busca (lista.mercadolivre)
+            items = _parse_search_page(resp.text)
 
-        data, _ = json.JSONDecoder().raw_decode(match.group(1))
-        items = data.get("appProps", {}).get("pageProps", {}).get("data", {}).get("items", [])
+        if not items:
+            logger.warning("Nenhum item encontrado no HTML")
+            return []
         logger.info(f"Página {url}: {len(items)} itens encontrados")
         return items
 
     except Exception as e:
         logger.error(f"Erro ao buscar {url}: {e}")
         return []
+
+
+def _parse_search_page(html: str) -> list[dict]:
+    """Parser para páginas de busca do lista.mercadolivre.com.br."""
+    items = []
+    try:
+        # Tenta extrair JSON do __PRELOADED_STATE__ ou similar
+        match = re.search(r'window\.__PRELOADED_STATE__\s*=\s*(\{.+?);\s*</script>', html, re.DOTALL)
+        if not match:
+            match = re.search(r'"results"\s*:\s*(\[.+?\])\s*,\s*"paging"', html, re.DOTALL)
+        if not match:
+            return []
+        raw = match.group(1)
+        results = json.loads(raw) if raw.startswith('[') else json.loads(match.group(1)).get("results", [])
+        for r in results:
+            items.append({"card": {
+                "metadata": {"id": r.get("id",""), "url": r.get("permalink","")},
+                "components": [
+                    {"type": "title", "title": {"text": r.get("title","")}},
+                    {"type": "price", "price": {
+                        "current_price": {"value": r.get("price", 0)},
+                        "previous_price": {"value": r.get("original_price", 0)},
+                    }},
+                ],
+                "pictures": {"pictures": [{"id": p.get("id","") for p in r.get("pictures", [])} if r.get("pictures") else {}]},
+            }})
+    except Exception as e:
+        logger.debug(f"Erro ao parsear página de busca: {e}")
+    return items
 
 
 def _parse_item(item: dict) -> dict | None:
