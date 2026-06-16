@@ -151,13 +151,9 @@ def get_best_offers() -> list[dict]:
         if len(all_offers) >= 10:
             break
 
-    # Amazon
-    try:
-        from amazon_api import get_amazon_offers
-        amazon_offers = get_amazon_offers()
-        all_offers.extend(amazon_offers)
-    except Exception as e:
-        logger.warning(f"Amazon indisponível: {e}")
+    # Amazon via Product Advertising API (habilitar quando tiver 3 vendas qualificadas)
+    # from amazon_api import get_amazon_offers
+    # all_offers.extend(get_amazon_offers())
 
     random.shuffle(all_offers)
     logger.info(f"Total de ofertas (ML + Amazon): {len(all_offers)}")
