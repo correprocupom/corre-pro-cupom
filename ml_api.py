@@ -42,8 +42,14 @@ def search_ml_site(query: str) -> list[dict]:
             logger.warning(f"ML site retornou {resp.status_code} para {query}")
             return []
 
-        # Log diagnóstico: primeiros 2000 chars do HTML
-        logger.info(f"[DIAG] HTML snippet ({query}): {resp.text[2000:4000]!r}")
+        # Log diagnóstico: encontra onde "price" aparece no HTML
+        html_text = resp.text
+        idx = html_text.find('"price"')
+        if idx == -1:
+            idx = html_text.find('price')
+        logger.info(f"[DIAG] 'price' encontrado em idx={idx}, snippet: {html_text[max(0,idx-50):idx+300]!r}")
+        idx2 = html_text.find('__PRELOADED_STATE__')
+        logger.info(f"[DIAG] '__PRELOADED_STATE__' em idx={idx2}")
 
         # Extrai JSON embutido na página (__PRELOADED_STATE__ ou similar)
         products = _parse_ml_html(resp.text, query)
