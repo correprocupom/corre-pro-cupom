@@ -2,138 +2,146 @@ import requests
 import random
 import logging
 import re
-import json
+import xml.etree.ElementTree as ET
 from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE
 
 logger = logging.getLogger(__name__)
 
 _posted_ids = set()
 
-SEARCH_QUERIES = [
-    "whey-protein",
-    "creatina",
-    "suplemento-esportivo",
-    "tenis-corrida",
-    "roupa-academia",
-    "bicicleta-speed",
-    "luva-boxe",
-    "halteres",
-    "kettlebell",
-    "chuteira-futebol",
-    "mochila-esporte",
-    "garrafa-termica",
-    "oculos-natacao",
-    "capacete-ciclismo",
+PROMOBIT_FEEDS = [
+    "https://www.promobit.com.br/oferta/esporte-e-fitness/feed/",
+    "https://www.promobit.com.br/oferta/suplementos/feed/",
+    "https://www.promobit.com.br/feed/",
 ]
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
-    "Accept": "text/html,application/xhtml+xml",
+    "Accept": "application/rss+xml,application/xml,text/xml,*/*",
     "Accept-Language": "pt-BR,pt;q=0.9",
 }
 
+SPORT_KEYWORDS = [
+    "esport", "fitness", "academia", "muscula", "suplemento", "whey", "creatina",
+    "proteina", "tenis", "corrida", "bike", "bicicleta", "natacao", "futebol",
+    "chuteira", "haltere", "kettlebell", "luva", "mochila", "ciclismo",
+]
 
-def search_ml_site(query: str) -> list[dict]:
-    """Faz scraping do site do ML para buscar produtos com desconto."""
+
+def _is_sport(text: str) -> bool:
+    t = text.lower()
+    return any(k in t for k in SPORT_KEYWORDS)
+
+
+def _extract_price(text: str) -> float:
+    match = re.search(r'R\$\s*([\d.,]+)', text)
+    if match:
+        return float(match.group(1).replace('.', '').replace(',', '.'))
+    match = re.search(r'([\d]+),([\d]{2})', text)
+    if match:
+        return float(f"{match.group(1)}.{match.group(2)}")
+    return 0.0
+
+
+def _extract_original_price(text: str) -> float:
+    matches = re.findall(r'R\$\s*([\d.,]+)', text)
+    if len(matches) >= 2:
+        prices = [float(m.replace('.', '').replace(',', '.')) for m in matches]
+        prices.sort(reverse=True)
+        return prices[0]
+    return 0.0
+
+
+def _fetch_promobit_feed(url: str) -> list[dict]:
+    """Busca e parseia RSS do Promobit."""
+    products = []
     try:
-        url = f"https://lista.mercadolivre.com.br/{query}"
         resp = requests.get(url, headers=HEADERS, timeout=15)
+        logger.info(f"Promobit {url}: status {resp.status_code}")
         if resp.status_code != 200:
-            logger.warning(f"ML site retornou {resp.status_code} para {query}")
             return []
 
-        # Log diagnóstico: encontra onde "price" aparece no HTML
-        html_text = resp.text
-        idx = html_text.find('"price"')
-        if idx == -1:
-            idx = html_text.find('price')
-        logger.info(f"[DIAG] 'price' encontrado em idx={idx}, snippet: {html_text[max(0,idx-50):idx+300]!r}")
-        idx2 = html_text.find('__PRELOADED_STATE__')
-        logger.info(f"[DIAG] '__PRELOADED_STATE__' em idx={idx2}")
+        root = ET.fromstring(resp.content)
+        ns = {'media': 'http://search.yahoo.com/mrss/'}
+        channel = root.find('channel')
+        if channel is None:
+            return []
 
-        # Extrai JSON embutido na página (__PRELOADED_STATE__ ou similar)
-        products = _parse_ml_html(resp.text, query)
-        logger.info(f"'{query}': {len(products)} produtos encontrados")
-        return products
+        items = channel.findall('item')
+        logger.info(f"Promobit: {len(items)} itens no feed")
+
+        for item in items:
+            try:
+                title = item.findtext('title', '')
+                link = item.findtext('link', '')
+                description = item.findtext('description', '') or ''
+                guid = item.findtext('guid', link)
+
+                if not _is_sport(title + ' ' + description):
+                    continue
+
+                full_text = title + ' ' + description
+                price = _extract_price(full_text)
+                original_price = _extract_original_price(full_text)
+
+                if price <= 0:
+                    continue
+                if price < MIN_PRICE or price > MAX_PRICE:
+                    continue
+
+                if original_price > price:
+                    discount = int(((original_price - price) / original_price) * 100)
+                    if discount < MIN_DISCOUNT_PERCENT:
+                        continue
+                else:
+                    original_price = price * 1.3  # assume 30% off se não tiver preço original
+
+                item_id = re.sub(r'[^a-z0-9]', '-', (guid or link).lower())[:60]
+                if item_id in _posted_ids:
+                    continue
+
+                image = ''
+                media_content = item.find('media:content', ns)
+                if media_content is not None:
+                    image = media_content.get('url', '')
+                if not image:
+                    enclosure = item.find('enclosure')
+                    if enclosure is not None:
+                        image = enclosure.get('url', '')
+                if not image:
+                    img_match = re.search(r'<img[^>]+src=["\']([^"\']+)["\']', description)
+                    if img_match:
+                        image = img_match.group(1)
+
+                products.append({
+                    "id": item_id,
+                    "title": title,
+                    "price": price,
+                    "original_price": original_price,
+                    "permalink": link,
+                    "thumbnail": image,
+                    "pictures": [{"url": image}] if image else [],
+                    "shipping": {"free_shipping": False},
+                    "_category_id": "MLB1276",
+                    "_source": "promobit",
+                })
+            except Exception as e:
+                logger.debug(f"Erro ao processar item: {e}")
+                continue
 
     except Exception as e:
-        logger.error(f"Erro ao buscar '{query}': {e}")
-        return []
-
-
-def _parse_ml_html(html: str, query: str) -> list[dict]:
-    """Extrai produtos do HTML do ML."""
-    products = []
-
-    # Tenta extrair do JSON embutido
-    pattern = r'"price":\s*(\d+(?:\.\d+)?)'
-    prices = re.findall(pattern, html)
-
-    # Extrai títulos
-    title_pattern = r'"title":\s*"([^"]{10,100})"'
-    titles = re.findall(title_pattern, html)
-
-    # Extrai links de produtos
-    link_pattern = r'"permalink":\s*"(https://www\.mercadolivre\.com\.br/[^"]+)"'
-    links = re.findall(link_pattern, html)
-
-    # Extrai imagens
-    img_pattern = r'"thumbnail":\s*"(https://[^"]+\.jpg[^"]*)"'
-    images = re.findall(img_pattern, html)
-
-    # Extrai preços originais
-    orig_pattern = r'"original_price":\s*(\d+(?:\.\d+)?)'
-    orig_prices = re.findall(orig_pattern, html)
-
-    # Combina os dados
-    max_items = min(len(titles), len(prices), len(links), 10)
-    for i in range(max_items):
-        try:
-            price = float(prices[i])
-            original_price = float(orig_prices[i]) if i < len(orig_prices) else 0
-            title = titles[i]
-            link = links[i] if i < len(links) else ""
-            image = images[i] if i < len(images) else ""
-
-            item_id = f"{query}-{i}-{int(price)}"
-
-            if item_id in _posted_ids:
-                continue
-            if price < MIN_PRICE or price > MAX_PRICE:
-                continue
-            if original_price and original_price > price:
-                discount = int(((original_price - price) / original_price) * 100)
-                if discount < MIN_DISCOUNT_PERCENT:
-                    continue
-            elif not original_price:
-                continue  # sem desconto visível, pula
-
-            products.append({
-                "id": item_id,
-                "title": title,
-                "price": price,
-                "original_price": original_price,
-                "permalink": link,
-                "thumbnail": image,
-                "pictures": [{"url": image}] if image else [],
-                "shipping": {"free_shipping": False},
-                "_category_id": "MLB1276",
-                "_source": "ml_site",
-            })
-        except (IndexError, ValueError):
-            continue
+        logger.error(f"Erro ao buscar feed {url}: {e}")
 
     return products
 
 
 def get_best_offers() -> list[dict]:
-    """Busca as melhores ofertas via scraping do site ML."""
+    """Busca ofertas esportivas via Promobit RSS."""
     all_offers = []
-    queries = random.sample(SEARCH_QUERIES, 5)
 
-    for query in queries:
-        products = search_ml_site(query)
-        for p in products[:3]:
+    for feed_url in PROMOBIT_FEEDS:
+        products = _fetch_promobit_feed(feed_url)
+        for p in products[:5]:
             if p["id"] not in _posted_ids:
                 all_offers.append(p)
                 _posted_ids.add(p["id"])
