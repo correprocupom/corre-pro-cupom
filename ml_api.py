@@ -51,28 +51,27 @@ HEADERS = {
 }
 
 OFFER_URLS = [
-    # Maior desconto
     "https://www.mercadolivre.com.br/ofertas#nav-header",
     "https://www.mercadolivre.com.br/ofertas?page=2",
-    # Maior desconto por categoria
-    "https://lista.mercadolivre.com.br/suplemento-esportivo_OrderId_PRICE*DESC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/whey-protein_OrderId_PRICE*DESC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/tenis-corrida_OrderId_PRICE*DESC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/creatina_OrderId_PRICE*DESC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/halteres-musculacao_OrderId_PRICE*DESC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/roupa-academia_OrderId_PRICE*DESC_NoIndex_True",
-    # Menor preço por categoria
-    "https://lista.mercadolivre.com.br/suplemento-esportivo_OrderId_PRICE*ASC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/whey-protein_OrderId_PRICE*ASC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/tenis-corrida_OrderId_PRICE*ASC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/kettlebell_OrderId_PRICE*ASC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/luva-boxe_OrderId_PRICE*ASC_NoIndex_True",
-    "https://lista.mercadolivre.com.br/bicicleta-speed_OrderId_PRICE*ASC_NoIndex_True",
+    "https://www.mercadolivre.com.br/ofertas?page=3",
+    "https://www.mercadolivre.com.br/ofertas?page=4",
+]
+
+
+EXCLUDE_KEYWORDS = [
+    "jaqueta", "casaco", "blusa de frio", "notebook", "tv ", "televisor",
+    "impressora", "celular", "smartphone", "tablet", "geladeira", "fogao",
+    "forno", "microondas", "aspirador", "liquidificador", "cafeteira",
+    "cama", "sofa", "colchao", "travesseiro", "enxoval", "figurinha",
+    "album de figurinha", "panela", "frigideira", "airfryer",
+    "marmita", "pote de vidro", "envelopes figurinha", "cromos",
 ]
 
 
 def _is_sport(text: str) -> bool:
     t = text.lower()
+    if any(k in t for k in EXCLUDE_KEYWORDS):
+        return False
     return any(k in t for k in SPORT_KEYWORDS)
 
 
