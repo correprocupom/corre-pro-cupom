@@ -1,145 +1,143 @@
 import requests
 import random
 import logging
-from ml_auth import get_access_token
+import re
+import json
 from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE
 
 logger = logging.getLogger(__name__)
 
-ML_API_BASE = "https://api.mercadolibre.com"
-
 _posted_ids = set()
 
 SEARCH_QUERIES = [
-    "suplemento proteina",
-    "whey protein",
+    "whey-protein",
     "creatina",
-    "tenis corrida",
-    "roupa academia",
-    "bicicleta",
-    "luva boxe",
-    "colchonete yoga",
-    "corda pular",
+    "suplemento-esportivo",
+    "tenis-corrida",
+    "roupa-academia",
+    "bicicleta-speed",
+    "luva-boxe",
     "halteres",
     "kettlebell",
-    "futebol chuteira",
-    "mochila esporte",
-    "garrafa termica esporte",
+    "chuteira-futebol",
+    "mochila-esporte",
+    "garrafa-termica",
+    "oculos-natacao",
+    "capacete-ciclismo",
 ]
 
-ML_SPORT_CATEGORIES = [
-    "MLB1276",
-    "MLB263535",
-    "MLB1271",
-    "MLB371",
-    "MLB1245",
-    "MLB3498",
-]
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
+    "Accept": "text/html,application/xhtml+xml",
+    "Accept-Language": "pt-BR,pt;q=0.9",
+}
 
 
-def _auth_headers() -> dict:
-    token = get_access_token()
-    if token:
-        return {"Authorization": f"Bearer {token}"}
-    return {}
-
-
-def search_offers(query: str) -> list[dict]:
-    """Busca produtos via query com autenticação."""
+def search_ml_site(query: str) -> list[dict]:
+    """Faz scraping do site do ML para buscar produtos com desconto."""
     try:
-        resp = requests.get(
-            f"{ML_API_BASE}/sites/MLB/search",
-            params={"q": query, "sort": "relevance", "condition": "new", "limit": 50},
-            headers=_auth_headers(),
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            return resp.json().get("results", [])
-        logger.error(f"Erro {resp.status_code} ao buscar '{query}'")
+        url = f"https://lista.mercadolivre.com.br/{query}"
+        resp = requests.get(url, headers=HEADERS, timeout=15)
+        if resp.status_code != 200:
+            logger.warning(f"ML site retornou {resp.status_code} para {query}")
+            return []
+
+        # Extrai JSON embutido na página (__PRELOADED_STATE__ ou similar)
+        products = _parse_ml_html(resp.text, query)
+        logger.info(f"'{query}': {len(products)} produtos encontrados")
+        return products
+
     except Exception as e:
         logger.error(f"Erro ao buscar '{query}': {e}")
-    return []
+        return []
 
 
-def search_by_category(category_id: str) -> list[dict]:
-    """Busca produtos por categoria com autenticação."""
-    try:
-        resp = requests.get(
-            f"{ML_API_BASE}/sites/MLB/search",
-            params={"category": category_id, "sort": "relevance", "condition": "new", "limit": 50},
-            headers=_auth_headers(),
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            return resp.json().get("results", [])
-    except Exception as e:
-        logger.error(f"Erro categoria {category_id}: {e}")
-    return []
+def _parse_ml_html(html: str, query: str) -> list[dict]:
+    """Extrai produtos do HTML do ML."""
+    products = []
+
+    # Tenta extrair do JSON embutido
+    pattern = r'"price":\s*(\d+(?:\.\d+)?)'
+    prices = re.findall(pattern, html)
+
+    # Extrai títulos
+    title_pattern = r'"title":\s*"([^"]{10,100})"'
+    titles = re.findall(title_pattern, html)
+
+    # Extrai links de produtos
+    link_pattern = r'"permalink":\s*"(https://www\.mercadolivre\.com\.br/[^"]+)"'
+    links = re.findall(link_pattern, html)
+
+    # Extrai imagens
+    img_pattern = r'"thumbnail":\s*"(https://[^"]+\.jpg[^"]*)"'
+    images = re.findall(img_pattern, html)
+
+    # Extrai preços originais
+    orig_pattern = r'"original_price":\s*(\d+(?:\.\d+)?)'
+    orig_prices = re.findall(orig_pattern, html)
+
+    # Combina os dados
+    max_items = min(len(titles), len(prices), len(links), 10)
+    for i in range(max_items):
+        try:
+            price = float(prices[i])
+            original_price = float(orig_prices[i]) if i < len(orig_prices) else 0
+            title = titles[i]
+            link = links[i] if i < len(links) else ""
+            image = images[i] if i < len(images) else ""
+
+            item_id = f"{query}-{i}-{int(price)}"
+
+            if item_id in _posted_ids:
+                continue
+            if price < MIN_PRICE or price > MAX_PRICE:
+                continue
+            if original_price and original_price > price:
+                discount = int(((original_price - price) / original_price) * 100)
+                if discount < MIN_DISCOUNT_PERCENT:
+                    continue
+            elif not original_price:
+                continue  # sem desconto visível, pula
+
+            products.append({
+                "id": item_id,
+                "title": title,
+                "price": price,
+                "original_price": original_price,
+                "permalink": link,
+                "thumbnail": image,
+                "pictures": [{"url": image}] if image else [],
+                "shipping": {"free_shipping": False},
+                "_category_id": "MLB1276",
+                "_source": "ml_site",
+            })
+        except (IndexError, ValueError):
+            continue
+
+    return products
 
 
-def get_product_details(item_id: str) -> dict | None:
-    try:
-        resp = requests.get(
-            f"{ML_API_BASE}/items/{item_id}",
-            headers=_auth_headers(),
-            timeout=10,
-        )
-        if resp.status_code == 200:
-            return resp.json()
-    except Exception as e:
-        logger.error(f"Erro produto {item_id}: {e}")
-    return None
+def get_best_offers() -> list[dict]:
+    """Busca as melhores ofertas via scraping do site ML."""
+    all_offers = []
+    queries = random.sample(SEARCH_QUERIES, 5)
+
+    for query in queries:
+        products = search_ml_site(query)
+        for p in products[:3]:
+            if p["id"] not in _posted_ids:
+                all_offers.append(p)
+                _posted_ids.add(p["id"])
+
+    random.shuffle(all_offers)
+    logger.info(f"Total de ofertas: {len(all_offers)}")
+    return all_offers
 
 
 def calculate_discount(original_price: float, sale_price: float) -> int:
     if not original_price or original_price <= sale_price:
         return 0
     return int(((original_price - sale_price) / original_price) * 100)
-
-
-def filter_product(item: dict) -> bool:
-    item_id = item.get("id")
-    if item_id in _posted_ids:
-        return False
-    price = item.get("price", 0)
-    if price < MIN_PRICE or price > MAX_PRICE:
-        return False
-    original_price = item.get("original_price") or 0
-    discount = calculate_discount(original_price, price)
-    if discount < MIN_DISCOUNT_PERCENT:
-        return False
-    return True
-
-
-def get_best_offers() -> list[dict]:
-    """Busca as melhores ofertas por query e categoria."""
-    all_offers = []
-
-    queries = random.sample(SEARCH_QUERIES, 5)
-    for query in queries:
-        products = search_offers(query)
-        good = [p for p in products if filter_product(p)]
-        for product in good[:3]:
-            details = get_product_details(product["id"])
-            if details:
-                details["_category_id"] = "MLB1276"
-                all_offers.append(details)
-                _posted_ids.add(product["id"])
-
-    categories = random.sample(ML_SPORT_CATEGORIES, 3)
-    for cat in categories:
-        products = search_by_category(cat)
-        good = [p for p in products if filter_product(p)]
-        for product in good[:2]:
-            details = get_product_details(product["id"])
-            if details:
-                details["_category_id"] = cat
-                all_offers.append(details)
-                _posted_ids.add(product["id"])
-
-    random.shuffle(all_offers)
-    logger.info(f"Total de ofertas encontradas: {len(all_offers)}")
-    return all_offers
 
 
 def format_price(price: float) -> str:
