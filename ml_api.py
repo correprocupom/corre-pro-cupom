@@ -3,7 +3,7 @@ import random
 import logging
 import re
 import json
-from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE
+from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE, SPORT_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -14,14 +14,6 @@ HEADERS = {
     "Accept-Language": "pt-BR,pt;q=0.9",
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
 }
-
-SPORT_KEYWORDS = [
-    "esport", "fitness", "academia", "muscula", "suplemento", "whey", "creatina",
-    "proteina", "tenis", "corrida", "bike", "bicicleta", "natacao", "futebol",
-    "chuteira", "haltere", "kettlebell", "luva", "agasalho", "ciclismo",
-    "mochila esport", "garrafa term", "oculos natacao", "capacete", "adidas",
-    "nike", "under armour", "puma", "speedo", "asics",
-]
 
 OFFER_URLS = [
     "https://www.mercadolivre.com.br/ofertas#nav-header",
