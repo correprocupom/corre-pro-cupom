@@ -18,7 +18,7 @@ def main():
     logger.info(f"Iniciando postagem ({hour}h BRT)...")
 
     from ml_api import get_best_offers
-    from whatsapp_bot import post_offer
+    from whatsapp_bot import send_offer
 
     offers = get_best_offers()
     if not offers:
@@ -27,7 +27,7 @@ def main():
 
     offer = offers[0]
     logger.info(f"Postando: {offer['title']}")
-    post_offer(offer)
+    send_offer(offer)
     logger.info("Postagem concluída.")
 
 if __name__ == "__main__":
