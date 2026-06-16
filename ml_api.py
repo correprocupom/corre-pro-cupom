@@ -14,13 +14,32 @@ ML_API_BASE = "https://api.mercadolibre.com"
 _posted_ids = set()
 
 
+SEARCH_QUERIES = [
+    "suplemento proteina",
+    "whey protein",
+    "creatina",
+    "tenis corrida",
+    "roupa academia",
+    "ciclismo capacete",
+    "bicicleta speed",
+    "luva boxe",
+    "colchonete yoga",
+    "corda pular",
+    "halteres",
+    "kettlebell",
+    "natacao oculos",
+    "futebol chuteira",
+]
+
+
 def search_offers(category_id: str) -> list[dict]:
-    """Busca produtos com desconto em uma categoria."""
+    """Busca produtos com desconto via query de texto (endpoint público)."""
+    query = random.choice(SEARCH_QUERIES)
     try:
         url = f"{ML_API_BASE}/sites/MLB/search"
         params = {
-            "category": category_id,
-            "sort": "price_asc",
+            "q": query,
+            "sort": "relevance",
             "condition": "new",
             "limit": 50,
         }
@@ -29,7 +48,7 @@ def search_offers(category_id: str) -> list[dict]:
         data = resp.json()
         return data.get("results", [])
     except Exception as e:
-        logger.error(f"Erro ao buscar categoria {category_id}: {e}")
+        logger.error(f"Erro ao buscar '{query}': {e}")
         return []
 
 
