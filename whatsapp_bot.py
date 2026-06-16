@@ -18,14 +18,43 @@ def _headers() -> dict:
     }
 
 
+TITLE_EMOJIS = [
+    (["corrida", "runner", "correr", "run ", "atletismo", "maratona"], "🏃"),
+    (["musculacao", "musculação", "haltere", "halter", "peso", "barra", "anilha", "supino", "agachamento"], "🏋️"),
+    (["bike", "biciclet", "ciclis", "mountain bike", "mtb", "spinning"], "🚴"),
+    (["futebol", "chuteira", "bola de futebol", "campo", "society"], "⚽"),
+    (["tenis", "tênis", "calçado esport", "sapatilha"], "👟"),
+    (["natacao", "natação", "nado", "piscina", "oculos de natacao", "touca"], "🏊"),
+    (["whey", "proteina", "proteína", "suplemento", "creatina", "bcaa", "pre-treino", "pre treino", "colageno", "colágeno", "vitamina"], "💊"),
+    (["yoga", "pilates", "meditacao", "meditação", "tapete"], "🧘"),
+    (["boxe", "muay thai", "mma", "luta", "luva", "saco de pancada"], "🥊"),
+    (["crossfit", "funcional", "kettlebell", "corda de pular", "speed rope"], "💪"),
+    (["agasalho", "camiseta", "bermuda", "short", "legging", "roupa", "uniforme", "moletom"], "👕"),
+    (["mochila", "bolsa esport", "bag esport"], "🎒"),
+    (["garrafa", "squeeze", "coqueteleira", "shaker"], "🥤"),
+    (["smartwatch", "relogio", "relógio", "monitor cardiaco", "gps esport"], "⌚"),
+    (["futebol americano", "basquete", "basquetebol", "volei", "vôlei", "handball"], "🏀"),
+    (["skate", "patins", "patinete"], "🛹"),
+    (["natacao", "surf", "stand up", "sup "], "🏄"),
+    (["tiro", "arco", "flecha"], "🎯"),
+]
+
+
+def _get_emoji(title: str) -> str:
+    t = title.lower()
+    for keywords, emoji in TITLE_EMOJIS:
+        if any(k in t for k in keywords):
+            return emoji
+    return "🏷️"
+
+
 def build_message(product: dict) -> str:
     """Monta o texto da mensagem no estilo dos grupos de oferta."""
     title = product.get("title", "Produto")
     price = product.get("price", 0)
     original_price = product.get("original_price") or 0
     discount = calculate_discount(original_price, price)
-    category_id = product.get("_category_id", "")
-    emoji = CATEGORY_EMOJIS.get(category_id, "🏷️")
+    emoji = _get_emoji(title)
 
     url = product.get("permalink", "")
     affiliate_link = get_affiliate_link(url)
