@@ -49,7 +49,7 @@ def main():
             sys.exit(1)
 
     if not test_connection():
-        print("\n❌ Falha na conexão com Telegram. Verifique seu token.\n")
+        print("\n❌ Falha na conexão com WhatsApp (Evolution API). Verifique as variáveis no .env\n")
         sys.exit(1)
 
     print("✅ Configuração OK — iniciando bot...\n")

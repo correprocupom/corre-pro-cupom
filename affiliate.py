@@ -19,25 +19,20 @@ def build_affiliate_link(product_url: str) -> str:
 
 
 def shorten_url(url: str) -> str:
-    """
-    Encurta o link usando o serviço gratuito TinyURL.
-    Links curtos ficam melhor nas mensagens do Telegram.
-    """
+    """Encurta o link usando is.gd (gratuito, sem página de preview)."""
     try:
         resp = requests.get(
-            f"https://tinyurl.com/api-create.php?url={url}",
+            "https://is.gd/create.php",
+            params={"format": "simple", "url": url},
             timeout=5
         )
-        if resp.status_code == 200:
+        if resp.status_code == 200 and resp.text.startswith("https://"):
             return resp.text.strip()
     except Exception as e:
         logger.warning(f"Falha ao encurtar URL: {e}")
     return url
 
 
-def get_affiliate_link(product_url: str, shorten: bool = True) -> str:
-    """Gera link de afiliado (e encurta opcionalmente)."""
-    link = build_affiliate_link(product_url)
-    if shorten:
-        link = shorten_url(link)
-    return link
+def get_affiliate_link(product_url: str, shorten: bool = False) -> str:
+    """Gera link de afiliado."""
+    return build_affiliate_link(product_url)
