@@ -4,7 +4,7 @@ import random
 from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
-from ml_api import get_best_offers
+from ml_api import get_best_offers, _mark_posted
 from whatsapp_bot import send_offer, send_daily_intro
 from config import POSTING_INTERVAL_MINUTES, START_HOUR, END_HOUR
 
@@ -50,6 +50,7 @@ def post_next_offer() -> None:
     success = send_offer(product)
 
     if success:
+        _mark_posted(product["id"])
         _posts_since_reload += 1
         logger.info(f"Postagem {_posts_since_reload}/{RELOAD_EVERY_N_POSTS} antes do próximo reload")
         time.sleep(random.randint(5, 30))

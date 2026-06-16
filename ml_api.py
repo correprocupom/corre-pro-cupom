@@ -3,11 +3,46 @@ import random
 import logging
 import re
 import json
+import os
+from datetime import datetime, timedelta
 from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE, SPORT_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
-_posted_ids = set()
+POSTED_IDS_FILE = os.path.join(os.path.dirname(__file__), "posted_ids.json")
+POSTED_IDS_EXPIRE_DAYS = 7  # não repete o mesmo produto por 7 dias
+
+def _load_posted_ids() -> dict:
+    """Carrega IDs postados com timestamp do arquivo."""
+    try:
+        if os.path.exists(POSTED_IDS_FILE):
+            with open(POSTED_IDS_FILE, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return {}
+
+def _save_posted_ids(data: dict) -> None:
+    try:
+        with open(POSTED_IDS_FILE, "w") as f:
+            json.dump(data, f)
+    except Exception as e:
+        logger.warning(f"Erro ao salvar posted_ids: {e}")
+
+def _clean_expired(data: dict) -> dict:
+    """Remove IDs mais antigos que 7 dias."""
+    cutoff = (datetime.now() - timedelta(days=POSTED_IDS_EXPIRE_DAYS)).isoformat()
+    return {k: v for k, v in data.items() if v >= cutoff}
+
+def _is_posted(item_id: str) -> bool:
+    data = _load_posted_ids()
+    return item_id in data
+
+def _mark_posted(item_id: str) -> None:
+    data = _load_posted_ids()
+    data = _clean_expired(data)
+    data[item_id] = datetime.now().isoformat()
+    _save_posted_ids(data)
 
 HEADERS = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0 Safari/537.36",
@@ -16,14 +51,23 @@ HEADERS = {
 }
 
 OFFER_URLS = [
+    # Maior desconto
     "https://www.mercadolivre.com.br/ofertas#nav-header",
     "https://www.mercadolivre.com.br/ofertas?page=2",
+    # Maior desconto por categoria
     "https://lista.mercadolivre.com.br/suplemento-esportivo_OrderId_PRICE*DESC_NoIndex_True",
     "https://lista.mercadolivre.com.br/whey-protein_OrderId_PRICE*DESC_NoIndex_True",
     "https://lista.mercadolivre.com.br/tenis-corrida_OrderId_PRICE*DESC_NoIndex_True",
     "https://lista.mercadolivre.com.br/creatina_OrderId_PRICE*DESC_NoIndex_True",
     "https://lista.mercadolivre.com.br/halteres-musculacao_OrderId_PRICE*DESC_NoIndex_True",
     "https://lista.mercadolivre.com.br/roupa-academia_OrderId_PRICE*DESC_NoIndex_True",
+    # Menor preço por categoria
+    "https://lista.mercadolivre.com.br/suplemento-esportivo_OrderId_PRICE*ASC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/whey-protein_OrderId_PRICE*ASC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/tenis-corrida_OrderId_PRICE*ASC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/kettlebell_OrderId_PRICE*ASC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/luva-boxe_OrderId_PRICE*ASC_NoIndex_True",
+    "https://lista.mercadolivre.com.br/bicicleta-speed_OrderId_PRICE*ASC_NoIndex_True",
 ]
 
 
@@ -121,7 +165,7 @@ def _parse_item(item: dict) -> dict | None:
             return None
 
         item_id = meta.get("id", "") or meta.get("product_id", "")
-        if not item_id or item_id in _posted_ids:
+        if not item_id or _is_posted(item_id):
             return None
 
         if price < MIN_PRICE or price > MAX_PRICE:
@@ -177,7 +221,6 @@ def get_best_offers() -> list[dict]:
             if not _is_sport(product["title"]):
                 continue
             all_offers.append(product)
-            _posted_ids.add(product["id"])
             if len(all_offers) >= 10:
                 break
         if len(all_offers) >= 10:
