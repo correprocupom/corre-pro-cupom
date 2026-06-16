@@ -1,21 +1,22 @@
 import requests
 import logging
 import time
-from config import ML_APP_ID, ML_CLIENT_SECRET
+from config import ML_APP_ID, ML_CLIENT_SECRET, ML_ACCESS_TOKEN
 
 logger = logging.getLogger(__name__)
 
-_access_token = None
-_token_expires_at = 0
+_access_token = ML_ACCESS_TOKEN
+_token_expires_at = time.time() + 21600  # 6 horas
 
 
 def get_access_token() -> str | None:
-    """Obtém token de acesso via Client Credentials (sem login do usuário)."""
     global _access_token, _token_expires_at
 
-    if _access_token and time.time() < _token_expires_at - 60:
+    # Usa o token salvo enquanto válido
+    if _access_token and time.time() < _token_expires_at - 300:
         return _access_token
 
+    # Tenta renovar via client_credentials
     try:
         resp = requests.post(
             "https://api.mercadolibre.com/oauth/token",
@@ -30,9 +31,14 @@ def get_access_token() -> str | None:
             data = resp.json()
             _access_token = data.get("access_token")
             _token_expires_at = time.time() + data.get("expires_in", 21600)
-            logger.info("Token ML obtido com sucesso")
+            logger.info("Token ML renovado via client_credentials")
             return _access_token
-        logger.error(f"Erro ao obter token ML: {resp.text}")
     except Exception as e:
-        logger.error(f"Falha na autenticação ML: {e}")
+        logger.error(f"Erro ao renovar token: {e}")
+
+    # Fallback: usa o token do env mesmo que próximo de expirar
+    if _access_token:
+        logger.warning("Usando token ML possivelmente expirado")
+        return _access_token
+
     return None
