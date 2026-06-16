@@ -14,7 +14,7 @@ scheduler = BlockingScheduler(timezone="America/Sao_Paulo")
 
 _offer_queue: list[dict] = []
 _posts_since_reload = 0
-RELOAD_EVERY_N_POSTS = 2  # busca novos produtos a cada 2 postagens
+RELOAD_EVERY_N_POSTS = 10  # busca novos produtos a cada 10 postagens (~1h40 com intervalo de 10min)
 
 
 def is_within_posting_hours() -> bool:

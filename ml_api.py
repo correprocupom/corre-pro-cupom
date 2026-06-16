@@ -57,6 +57,8 @@ OFFER_URLS = [
     "https://www.mercadolivre.com.br/ofertas?page=4",
 ]
 
+_url_index = 0  # rotaciona entre as páginas a cada busca
+
 
 def _is_sport(text: str) -> bool:
     t = text.lower()
@@ -197,19 +199,22 @@ def _parse_item(item: dict) -> dict | None:
 
 
 def get_best_offers() -> list[dict]:
-    """Busca ofertas esportivas do ML e Amazon."""
+    """Busca ofertas esportivas — rotaciona entre páginas para evitar bloqueio."""
+    global _url_index
     all_offers = []
 
-    # Mercado Livre
-    for page_url in OFFER_URLS:
-        raw_items = _extract_items_from_page(page_url)
-        for item in raw_items:
-            product = _parse_item(item)
-            if not product:
-                continue
-            if not _is_sport(product["title"]):
-                continue
-            all_offers.append(product)
+    # Busca só 1 página por vez, rotacionando
+    url = OFFER_URLS[_url_index % len(OFFER_URLS)]
+    _url_index += 1
+
+    raw_items = _extract_items_from_page(url)
+    for item in raw_items:
+        product = _parse_item(item)
+        if not product:
+            continue
+        if not _is_sport(product["title"]):
+            continue
+        all_offers.append(product)
             if len(all_offers) >= 10:
                 break
         if len(all_offers) >= 10:
