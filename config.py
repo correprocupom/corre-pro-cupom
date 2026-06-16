@@ -26,6 +26,9 @@ MAX_PRICE = float(os.getenv("MAX_PRICE", 2000))
 _keywords_raw = os.getenv("SPORT_KEYWORDS", "esport,fitness,suplemento,whey,creatina,tenis,corrida,academia")
 SPORT_KEYWORDS = [k.strip().lower() for k in _keywords_raw.split(",") if k.strip()]
 
+_exclude_raw = os.getenv("EXCLUDE_KEYWORDS", "")
+EXCLUDE_KEYWORDS = [k.strip().lower() for k in _exclude_raw.split(",") if k.strip()]
+
 # === AFILIADOS ===
 ML_AFFILIATE_ID = os.getenv("ML_AFFILIATE_ID")
 AMAZON_AFFILIATE_TAG = os.getenv("AMAZON_AFFILIATE_TAG", "")

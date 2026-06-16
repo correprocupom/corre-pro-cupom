@@ -5,7 +5,7 @@ import re
 import json
 import os
 from datetime import datetime, timedelta
-from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE, SPORT_KEYWORDS
+from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE, SPORT_KEYWORDS, EXCLUDE_KEYWORDS
 
 logger = logging.getLogger(__name__)
 
@@ -55,16 +55,6 @@ OFFER_URLS = [
     "https://www.mercadolivre.com.br/ofertas?page=2",
     "https://www.mercadolivre.com.br/ofertas?page=3",
     "https://www.mercadolivre.com.br/ofertas?page=4",
-]
-
-
-EXCLUDE_KEYWORDS = [
-    "jaqueta", "casaco", "blusa de frio", "notebook", "tv ", "televisor",
-    "impressora", "celular", "smartphone", "tablet", "geladeira", "fogao",
-    "forno", "microondas", "aspirador", "liquidificador", "cafeteira",
-    "cama", "sofa", "colchao", "travesseiro", "enxoval", "figurinha",
-    "album de figurinha", "panela", "frigideira", "airfryer",
-    "marmita", "pote de vidro", "envelopes figurinha", "cromos",
 ]
 
 
