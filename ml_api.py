@@ -132,9 +132,10 @@ def _parse_item(item: dict) -> dict | None:
 
 
 def get_best_offers() -> list[dict]:
-    """Busca ofertas esportivas da página de ofertas do ML."""
+    """Busca ofertas esportivas do ML e Amazon."""
     all_offers = []
 
+    # Mercado Livre
     for page_url in OFFER_URLS:
         raw_items = _extract_items_from_page(page_url)
         for item in raw_items:
@@ -150,8 +151,16 @@ def get_best_offers() -> list[dict]:
         if len(all_offers) >= 10:
             break
 
+    # Amazon
+    try:
+        from amazon_api import get_amazon_offers
+        amazon_offers = get_amazon_offers()
+        all_offers.extend(amazon_offers)
+    except Exception as e:
+        logger.warning(f"Amazon indisponível: {e}")
+
     random.shuffle(all_offers)
-    logger.info(f"Total de ofertas esportivas: {len(all_offers)}")
+    logger.info(f"Total de ofertas (ML + Amazon): {len(all_offers)}")
     return all_offers
 
 
