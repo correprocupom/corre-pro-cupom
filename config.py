@@ -16,6 +16,8 @@ _groups_raw = os.getenv("WA_GROUP_IDS", "")
 WA_GROUP_IDS = [g.strip() for g in _groups_raw.split(",") if g.strip()]
 
 ML_AFFILIATE_ID = os.getenv("ML_AFFILIATE_ID")
+ML_APP_ID = os.getenv("ML_APP_ID")
+ML_CLIENT_SECRET = os.getenv("ML_CLIENT_SECRET")
 POSTING_INTERVAL_MINUTES = int(os.getenv("POSTING_INTERVAL_MINUTES", 30))
 START_HOUR = int(os.getenv("START_HOUR", 8))
 END_HOUR = int(os.getenv("END_HOUR", 22))

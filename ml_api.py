@@ -1,7 +1,8 @@
 import requests
 import random
 import logging
-from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE, ML_AFFILIATE_ID
+from ml_auth import get_access_token
+from config import MIN_DISCOUNT_PERCENT, MAX_PRICE, MIN_PRICE
 
 logger = logging.getLogger(__name__)
 
@@ -23,82 +24,70 @@ SEARCH_QUERIES = [
     "kettlebell",
     "futebol chuteira",
     "mochila esporte",
-    "garrafa termica",
+    "garrafa termica esporte",
+]
+
+ML_SPORT_CATEGORIES = [
+    "MLB1276",
+    "MLB263535",
+    "MLB1271",
+    "MLB371",
+    "MLB1245",
+    "MLB3498",
 ]
 
 
-def search_offers_lomadee() -> list[dict]:
-    """
-    Busca ofertas via Lomadee — plataforma de afiliados BR
-    que agrega ofertas do ML com desconto, sem precisar de OAuth.
-    """
+def _auth_headers() -> dict:
+    token = get_access_token()
+    if token:
+        return {"Authorization": f"Bearer {token}"}
+    return {}
+
+
+def search_offers(query: str) -> list[dict]:
+    """Busca produtos via query com autenticação."""
     try:
-        url = "https://api.lomadee.com/v3/BR/offer/_search"
-        params = {
-            "sourceId": "28571273",
-            "token": "6296B1AA4BB2D2E6C57E",
-            "keyword": random.choice(SEARCH_QUERIES),
-            "categoryId": "6424",
-            "size": 20,
-        }
-        resp = requests.get(url, params=params, timeout=10)
+        resp = requests.get(
+            f"{ML_API_BASE}/sites/MLB/search",
+            params={"q": query, "sort": "relevance", "condition": "new", "limit": 50},
+            headers=_auth_headers(),
+            timeout=10,
+        )
         if resp.status_code == 200:
-            data = resp.json()
-            offers = data.get("offers", [])
-            return [_normalize_lomadee(o) for o in offers if _filter_lomadee(o)]
+            return resp.json().get("results", [])
+        logger.error(f"Erro {resp.status_code} ao buscar '{query}'")
     except Exception as e:
-        logger.error(f"Erro Lomadee: {e}")
+        logger.error(f"Erro ao buscar '{query}': {e}")
     return []
 
 
-def _normalize_lomadee(offer: dict) -> dict:
-    """Converte formato Lomadee para o formato interno do bot."""
-    return {
-        "id": str(offer.get("id", "")),
-        "title": offer.get("name", ""),
-        "price": float(offer.get("price", 0)),
-        "original_price": float(offer.get("priceFrom") or offer.get("price", 0)),
-        "permalink": offer.get("link", ""),
-        "thumbnail": offer.get("thumbnail", ""),
-        "pictures": [{"url": offer.get("thumbnail", "")}],
-        "shipping": {"free_shipping": offer.get("freeShipping", False)},
-        "_category_id": "MLB1276",
-        "_source": "lomadee",
-    }
-
-
-def _filter_lomadee(offer: dict) -> bool:
-    price = float(offer.get("price", 0))
-    price_from = float(offer.get("priceFrom") or 0)
-    if price < MIN_PRICE or price > MAX_PRICE:
-        return False
-    if price_from and price_from > price:
-        discount = int(((price_from - price) / price_from) * 100)
-        if discount < MIN_DISCOUNT_PERCENT:
-            return False
-    return True
-
-
-def search_offers_ml_direct(query: str) -> list[dict]:
-    """Busca direta na API pública do ML (sem OAuth)."""
+def search_by_category(category_id: str) -> list[dict]:
+    """Busca produtos por categoria com autenticação."""
     try:
-        url = f"{ML_API_BASE}/sites/MLB/search"
-        params = {"q": query, "sort": "relevance", "condition": "new", "limit": 50}
-        resp = requests.get(url, params=params, timeout=10)
+        resp = requests.get(
+            f"{ML_API_BASE}/sites/MLB/search",
+            params={"category": category_id, "sort": "relevance", "condition": "new", "limit": 50},
+            headers=_auth_headers(),
+            timeout=10,
+        )
         if resp.status_code == 200:
             return resp.json().get("results", [])
     except Exception as e:
-        logger.error(f"Erro ML direto '{query}': {e}")
+        logger.error(f"Erro categoria {category_id}: {e}")
     return []
 
 
 def get_product_details(item_id: str) -> dict | None:
     try:
-        resp = requests.get(f"{ML_API_BASE}/items/{item_id}", timeout=10)
+        resp = requests.get(
+            f"{ML_API_BASE}/items/{item_id}",
+            headers=_auth_headers(),
+            timeout=10,
+        )
         if resp.status_code == 200:
             return resp.json()
     except Exception as e:
-        logger.error(f"Erro ao buscar produto {item_id}: {e}")
+        logger.error(f"Erro produto {item_id}: {e}")
     return None
 
 
@@ -123,29 +112,33 @@ def filter_product(item: dict) -> bool:
 
 
 def get_best_offers() -> list[dict]:
-    """Tenta Lomadee primeiro, cai para ML direto se falhar."""
+    """Busca as melhores ofertas por query e categoria."""
     all_offers = []
 
-    # Tenta Lomadee
-    lomadee = search_offers_lomadee()
-    if lomadee:
-        logger.info(f"Lomadee: {len(lomadee)} ofertas")
-        all_offers.extend(lomadee)
+    queries = random.sample(SEARCH_QUERIES, 5)
+    for query in queries:
+        products = search_offers(query)
+        good = [p for p in products if filter_product(p)]
+        for product in good[:3]:
+            details = get_product_details(product["id"])
+            if details:
+                details["_category_id"] = "MLB1276"
+                all_offers.append(details)
+                _posted_ids.add(product["id"])
 
-    # Complementa com ML direto
-    if len(all_offers) < 5:
-        for query in random.sample(SEARCH_QUERIES, 3):
-            products = search_offers_ml_direct(query)
-            good = [p for p in products if filter_product(p)]
-            for product in good[:3]:
-                details = get_product_details(product["id"])
-                if details:
-                    details["_category_id"] = "MLB1276"
-                    all_offers.append(details)
-                    _posted_ids.add(product["id"])
+    categories = random.sample(ML_SPORT_CATEGORIES, 3)
+    for cat in categories:
+        products = search_by_category(cat)
+        good = [p for p in products if filter_product(p)]
+        for product in good[:2]:
+            details = get_product_details(product["id"])
+            if details:
+                details["_category_id"] = cat
+                all_offers.append(details)
+                _posted_ids.add(product["id"])
 
     random.shuffle(all_offers)
-    logger.info(f"Total de ofertas: {len(all_offers)}")
+    logger.info(f"Total de ofertas encontradas: {len(all_offers)}")
     return all_offers
 
 
