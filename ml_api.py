@@ -42,6 +42,9 @@ def search_ml_site(query: str) -> list[dict]:
             logger.warning(f"ML site retornou {resp.status_code} para {query}")
             return []
 
+        # Log diagnóstico: primeiros 2000 chars do HTML
+        logger.info(f"[DIAG] HTML snippet ({query}): {resp.text[2000:4000]!r}")
+
         # Extrai JSON embutido na página (__PRELOADED_STATE__ ou similar)
         products = _parse_ml_html(resp.text, query)
         logger.info(f"'{query}': {len(products)} produtos encontrados")
