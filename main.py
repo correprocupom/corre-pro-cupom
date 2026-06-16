@@ -1,7 +1,7 @@
 import logging
 import sys
-from telegram_bot import test_connection
-from config import TELEGRAM_BOT_TOKEN, TELEGRAM_CHANNEL_ID, ML_AFFILIATE_ID
+from whatsapp_bot import test_connection
+from config import EVOLUTION_API_URL, EVOLUTION_API_KEY, EVOLUTION_INSTANCE, ML_AFFILIATE_ID
 
 logging.basicConfig(
     level=logging.INFO,
@@ -18,13 +18,16 @@ def check_config() -> bool:
     """Verifica se todas as variáveis de ambiente estão configuradas."""
     missing = []
 
-    if not TELEGRAM_BOT_TOKEN or TELEGRAM_BOT_TOKEN == "seu_token_aqui":
-        missing.append("TELEGRAM_BOT_TOKEN")
+    if not EVOLUTION_API_URL:
+        missing.append("EVOLUTION_API_URL")
 
-    if not TELEGRAM_CHANNEL_ID or TELEGRAM_CHANNEL_ID == "@seu_canal_aqui":
-        missing.append("TELEGRAM_CHANNEL_ID")
+    if not EVOLUTION_API_KEY:
+        missing.append("EVOLUTION_API_KEY")
 
-    if not ML_AFFILIATE_ID or ML_AFFILIATE_ID == "seu_id_afiliado_aqui":
+    if not EVOLUTION_INSTANCE:
+        missing.append("EVOLUTION_INSTANCE")
+
+    if not ML_AFFILIATE_ID:
         missing.append("ML_AFFILIATE_ID (opcional, mas sem ele você não ganha comissão)")
 
     if missing:

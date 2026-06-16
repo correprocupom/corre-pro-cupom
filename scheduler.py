@@ -5,7 +5,7 @@ from datetime import datetime
 from apscheduler.schedulers.blocking import BlockingScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 from ml_api import get_best_offers
-from telegram_bot import send_offer, send_daily_intro
+from whatsapp_bot import send_offer, send_daily_intro
 from config import POSTING_INTERVAL_MINUTES, START_HOUR, END_HOUR
 
 logger = logging.getLogger(__name__)

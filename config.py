@@ -3,8 +3,18 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
-TELEGRAM_CHANNEL_ID = os.getenv("TELEGRAM_CHANNEL_ID")
+# === WHATSAPP (Evolution API) ===
+EVOLUTION_API_URL = os.getenv("EVOLUTION_API_URL", "http://localhost:8080")
+EVOLUTION_API_KEY = os.getenv("EVOLUTION_API_KEY", "")
+EVOLUTION_INSTANCE = os.getenv("EVOLUTION_INSTANCE", "corre-pro-cupom")
+
+# ID do Canal do WhatsApp (formato: 120363XXXXXXXXXX@newsletter)
+WA_CHANNEL_ID = os.getenv("WA_CHANNEL_ID", "")
+
+# IDs dos grupos separados por vírgula (formato: 5511999999999-XXXXXXXXXX@g.us)
+_groups_raw = os.getenv("WA_GROUP_IDS", "")
+WA_GROUP_IDS = [g.strip() for g in _groups_raw.split(",") if g.strip()]
+
 ML_AFFILIATE_ID = os.getenv("ML_AFFILIATE_ID")
 POSTING_INTERVAL_MINUTES = int(os.getenv("POSTING_INTERVAL_MINUTES", 30))
 START_HOUR = int(os.getenv("START_HOUR", 8))
